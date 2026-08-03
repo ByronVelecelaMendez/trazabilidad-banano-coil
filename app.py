@@ -6,13 +6,23 @@ import psycopg2
 import psycopg2.extras
 import streamlit as st
 
-DB_CONFIG = {
-    "host": "localhost",
-    "port": 5433,
-    "dbname": "trazabilidad",
-    "user": "postgres",
-    "password": "postgres",
-}
+try:
+    _db = st.secrets["postgres"]
+    DB_CONFIG = {
+        "host": _db["host"],
+        "port": int(_db["port"]),
+        "dbname": _db["dbname"],
+        "user": _db["user"],
+        "password": _db["password"],
+    }
+except Exception:
+    DB_CONFIG = {
+        "host": "localhost",
+        "port": 5433,
+        "dbname": "trazabilidad",
+        "user": "postgres",
+        "password": "postgres",
+    }
 
 GENESIS = "0" * 64
 UMBRAL_FRIO = 14.0
