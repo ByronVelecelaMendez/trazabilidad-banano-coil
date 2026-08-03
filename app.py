@@ -84,12 +84,6 @@ def calcular_hash(ev):
     return hashlib.sha256(serializar(ev).encode("utf-8")).hexdigest()
 
 
-def linea_humana(ev):
-    fecha = ev["fecha_evento"]
-    fstr = fecha.strftime("%d/%m %H:%M") if isinstance(fecha, datetime) else str(fecha)
-    return f"{ICON.get(ev['tipo_evento'], '•')} {ev['tipo_evento'].capitalize()} · {ev['finca_origen']} · {fstr} · {float(ev['temperatura']):.1f}°C · {int(ev['cajas'])} cajas"
-
-
 def ultimo_hash():
     with get_conn() as conn, conn.cursor() as cur:
         cur.execute("SELECT hash_evento FROM eventos_trazabilidad ORDER BY id DESC LIMIT 1")
@@ -118,21 +112,6 @@ def insertar_evento(datos):
 def leer_eventos():
     with get_conn() as conn:
         return pd.read_sql("SELECT * FROM eventos_trazabilidad ORDER BY id ASC", conn)
-
-
-def verificar_integridad(df, sim_id=None):
-    esperado = GENESIS
-    estados = []
-    ok = True
-    for _, fila in df.iterrows():
-        ev = fila.to_dict()
-        roto = str(ev["hash_previo"]) != esperado
-        alterado = (calcular_hash(ev) != ev["hash_evento"]) or (ev["id"] == sim_id)
-        if roto or alterado:
-            ok = False
-        estados.append({"ev": ev, "roto": roto, "alterado": alterado})
-        esperado = ev["hash_evento"]
-    return ok, estados
 
 
 def kpis(df):
@@ -168,34 +147,26 @@ def barra(data, campo_x, campo_y, titulo_y):
     )
 
 
-def bloque_html(estado, es_ultimo):
-    ev = estado["ev"]
-    malo = estado["roto"] or estado["alterado"]
+def bloque_mini(ev, malo, es_ultimo):
     borde = "#C0392B" if malo else "#2E7D32"
     fondo = "#FCEDEB" if malo else "#EDF7ED"
     chip = "#C0392B" if malo else "#2E7D32"
-    icono = "SELLO ROTO" if malo else "SELLO VÁLIDO"
-    nota = ""
-    if malo:
-        nota = "<div style='color:#C0392B; font-size:12.5px; margin-top:6px; font-weight:600'>El sello ya no coincide con los datos: registro alterado.</div>"
-    conector = ""
-    if not es_ultimo:
-        col = "#C0392B" if malo else "#C8A032"
-        txt = "cadena rota aquí" if malo else "el sello se pasa al siguiente bloque"
-        conector = f"<div style='text-align:center; margin:3px 0'><span style='color:{col}; font-size:18px'>&#9660;</span><div style='color:{col}; font-size:11px; font-weight:600'>{txt}</div></div>"
-    return f"""
-    <div style="border:1.5px solid {borde}; background:{fondo}; border-radius:12px; padding:13px 18px; max-width:680px; margin:0 auto;">
-      <div style="display:flex; justify-content:space-between; align-items:center;">
-        <span style="font-weight:700; color:#3A3222; font-size:14.5px">{linea_humana(ev)}</span>
-        <span style="background:{chip}; color:#FFF; font-size:11px; font-weight:700; padding:4px 11px; border-radius:20px; white-space:nowrap">{icono}</span>
-      </div>
-      <div style="font-family:monospace; font-size:12.5px; color:#8A7A55; margin-top:8px; line-height:1.7">
-        Sello de este bloque: <span style="color:#5A5040">{ev['hash_evento'][:22]}…</span>
-      </div>
-      {nota}
-    </div>
-    {conector}
-    """
+    estado = "ROTO" if malo else "OK"
+    tipo = str(ev["tipo_evento"]).capitalize()
+    icono = ICON.get(ev["tipo_evento"], "•")
+    bloque = (f"<div style='border:1.5px solid {borde}; background:{fondo}; border-radius:12px; padding:12px 10px; width:150px; text-align:center; flex:0 0 auto;'>"
+              f"<div style='font-size:26px; line-height:1'>{icono}</div>"
+              f"<div style='font-weight:700; color:#3A3222; font-size:13px; margin-top:4px'>{tipo}</div>"
+              f"<div style='color:#8A7A55; font-size:11px'>{ev['lote_id']} · Bloque {ev['id']}</div>"
+              f"<div style='font-family:monospace; font-size:10px; color:#A99770; margin-top:6px'>{ev['hash_evento'][:10]}…</div>"
+              f"<div style='background:{chip}; color:#FFF; font-size:10px; font-weight:700; padding:2px 8px; border-radius:20px; display:inline-block; margin-top:8px'>{estado}</div>"
+              f"</div>")
+    if es_ultimo:
+        return bloque
+    col = "#C0392B" if malo else "#C8A032"
+    simbolo = "✕" if malo else "🔗"
+    enlace = f"<div style='display:flex; align-items:center; color:{col}; font-size:18px; flex:0 0 auto; padding:0 2px'>{simbolo}</div>"
+    return bloque + enlace
 
 
 st.set_page_config(page_title="Trazabilidad del banano", layout="wide")
@@ -206,7 +177,7 @@ st.markdown(
     #MainMenu {visibility: hidden;}
     footer {visibility: hidden;}
     header {visibility: hidden;}
-    .block-container {padding-top: 1.5rem; padding-bottom: 2rem; max-width: 1150px;}
+    .block-container {padding-top: 1rem; padding-bottom: 1.5rem; max-width: 1150px;} .stExpander {margin-bottom: 0.4rem;} [data-testid="stVerticalBlock"] {gap: 0.7rem;}
     [data-testid="stMetric"] {
         background: #FAF4E6;
         border: 1px solid #E8DCBC;
@@ -223,6 +194,11 @@ st.markdown(
     h1, h2, h3 {color: #3A3222;}
     .stTabs [data-baseweb="tab-list"] {gap: 6px; border-bottom: 1px solid #E8DCBC;}
     hr {border-color: #E8DCBC; margin: 0.8rem 0;}
+    [data-testid="stVerticalBlock"] {gap: 0.6rem;}
+    [data-testid="stHorizontalBlock"] {gap: 0.8rem;}
+    div[data-testid="stMarkdownContainer"] p {margin-bottom: 0.3rem;}
+    .stAlert {padding: 0.6rem 0.9rem;}
+    hr {margin: 0.5rem 0 !important;}
     </style>
     """,
     unsafe_allow_html=True,
@@ -290,47 +266,95 @@ with tab_traza:
 with tab_int:
     st.subheader("Verificación de integridad de la cadena")
 
-    with st.expander("¿Qué es esto y cómo funciona? (léelo aquí)"):
+    with st.expander("¿Cómo funciona? (explicación sencilla)"):
         st.markdown(
-            "Imagina que cada registro se cierra con un **sello único** (un código llamado *hash*). "
-            "Ese sello se calcula con los datos del registro **más** el sello del registro anterior, "
-            "por eso todos quedan **encadenados** como los eslabones de una cadena.\n\n"
-            "Si alguien cambia un dato —por ejemplo, baja una temperatura para ocultar una falla— "
-            "el sello de ese registro **deja de coincidir** con su contenido, y como los siguientes "
-            "dependían de él, **la cadena se rompe y la manipulación queda a la vista**.\n\n"
-            "Eso es lo que hace confiable la información: nadie puede modificarla sin que se note."
+            "Cada registro se cierra con un sello único (un código llamado hash) que se calcula "
+            "a partir de sus datos más el sello del registro anterior. Así todos quedan encadenados. "
+            "Si alguien cambia un solo dato, el sello de ese bloque cambia por completo y deja de coincidir, "
+            "rompiendo la cadena. Por eso nadie puede alterar la información sin que se note. "
+            "Usa el demostrador de abajo para verlo con tus propios ojos."
         )
 
     df = leer_eventos()
     if df.empty:
         st.info("Aún no hay eventos registrados.")
     else:
-        st.markdown("**Prueba tú mismo:** elige un bloque para simular que alguien lo manipula y observa cómo se rompe la cadena.")
-        c_sel, c_btn = st.columns([2, 1])
-        with c_sel:
-            opciones = ["(cadena original, sin alterar)"] + [f"Bloque {int(r.id)} - {r.tipo_evento} {r.lote_id}" for r in df.itertuples()]
-            sel = st.selectbox("Simular manipulación de un bloque", opciones, label_visibility="collapsed")
+        eventos = df.to_dict("records")
 
-        sim_id = None
-        if not sel.startswith("("):
-            sim_id = int(sel.split()[1])
+        st.markdown("##### Demostrador: intenta manipular un dato")
+        col_l, col_r = st.columns([1, 1])
+        with col_l:
+            etiquetas = {f"Bloque {int(e['id'])} · {e['tipo_evento']} · {e['lote_id']}": int(e["id"]) for e in eventos}
+            sel = st.selectbox("Elige un bloque", list(etiquetas.keys()))
+            bid = etiquetas[sel]
+            ev_sel = next(e for e in eventos if int(e["id"]) == bid)
+            temp_orig = float(ev_sel["temperatura"])
+        with col_r:
+            nueva_temp = st.number_input("Cambia la temperatura (°C)", value=temp_orig, step=0.1, format="%.1f")
 
-        ok, estados = verificar_integridad(df, sim_id=sim_id)
-        malos = sum(1 for e in estados if e["roto"] or e["alterado"])
+        ev_mod = dict(ev_sel)
+        ev_mod["temperatura"] = nueva_temp
+        sello_original = ev_sel["hash_evento"]
+        sello_nuevo = calcular_hash(ev_mod)
+        manipulado = sello_nuevo != sello_original
 
-        m1, m2, m3 = st.columns(3)
-        m1.metric("Bloques verificados", len(estados))
-        m2.metric("Bloques alterados", malos)
-        m3.metric("Estado", "OK" if ok else "ALERTA")
+        cc1, cc2 = st.columns(2)
+        with cc1:
+            st.markdown(
+                f"<div style='border:1px solid #E8DCBC; background:#FAF4E6; border-radius:10px; padding:12px'>"
+                f"<div style='font-size:13px; color:#8A7A55; font-weight:600'>Sello guardado (original)</div>"
+                f"<div style='font-family:monospace; font-size:12px; color:#5A5040; margin-top:6px; word-break:break-all'>{sello_original[:40]}…</div></div>",
+                unsafe_allow_html=True,
+            )
+        with cc2:
+            col_b = "#C0392B" if manipulado else "#2E7D32"
+            bg_b = "#FCEDEB" if manipulado else "#EDF7ED"
+            st.markdown(
+                f"<div style='border:1px solid {col_b}; background:{bg_b}; border-radius:10px; padding:12px'>"
+                f"<div style='font-size:13px; color:{col_b}; font-weight:600'>Sello recalculado (con tu cambio)</div>"
+                f"<div style='font-family:monospace; font-size:12px; color:#5A5040; margin-top:6px; word-break:break-all'>{sello_nuevo[:40]}…</div></div>",
+                unsafe_allow_html=True,
+            )
+
+        if manipulado:
+            st.error("Los sellos NO coinciden. Cambiar un solo dato altera el sello por completo, y el sistema detecta la manipulación al instante.")
+        else:
+            st.info("Los sellos coinciden: no has cambiado ningún dato. Modifica la temperatura para ver qué ocurre.")
+
+        st.markdown("<div style='height:6px'></div>", unsafe_allow_html=True)
+
+        esperado = GENESIS
+        estados = []
+        ok = True
+        for e in eventos:
+            roto = str(e["hash_previo"]) != esperado
+            alterado = (calcular_hash(e) != e["hash_evento"]) or (int(e["id"]) == bid and manipulado)
+            if roto or alterado:
+                ok = False
+            estados.append({"ev": e, "malo": roto or alterado})
+            esperado = e["hash_evento"]
 
         if ok:
-            st.success(f"Cadena íntegra: los {len(estados)} bloques son auténticos y nadie los modificó.")
+            st.markdown(
+                "<div style='background:#EDF7ED; border:1px solid #2E7D32; border-radius:12px; padding:16px; text-align:center'>"
+                f"<span style='font-size:22px'>✅</span> <span style='color:#1E5E22; font-weight:700; font-size:17px'>Cadena verificada · {len(estados)} bloques auténticos</span></div>",
+                unsafe_allow_html=True,
+            )
         else:
-            st.error(f"Se detectó manipulación en {malos} bloque(s). La información ya no es confiable.")
+            malos = sum(1 for e in estados if e["malo"])
+            st.markdown(
+                "<div style='background:#FCEDEB; border:1px solid #C0392B; border-radius:12px; padding:16px; text-align:center'>"
+                f"<span style='font-size:22px'>⛔</span> <span style='color:#A5281B; font-weight:700; font-size:17px'>Cadena comprometida · {malos} bloque(s) manipulado(s)</span></div>",
+                unsafe_allow_html=True,
+            )
 
-        st.markdown("<div style='height:8px'></div>", unsafe_allow_html=True)
-        for i, estado in enumerate(estados):
-            st.markdown(bloque_html(estado, i == len(estados) - 1), unsafe_allow_html=True)
+        st.markdown("<div style='height:14px'></div>", unsafe_allow_html=True)
+        st.caption("Cadena de bloques")
+        cadena = "<div style='display:flex; flex-wrap:wrap; align-items:center; gap:2px'>"
+        for i, e in enumerate(estados):
+            cadena += bloque_mini(e["ev"], e["malo"], i == len(estados) - 1)
+        cadena += "</div>"
+        st.markdown(cadena, unsafe_allow_html=True)
 
 with tab_bi:
     st.subheader("Indicadores de trazabilidad")
