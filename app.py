@@ -27,7 +27,7 @@ except Exception:
 
 GENESIS = "0" * 64
 UMBRAL_FRIO = 14.0
-GOLD = "#B8901F"
+AZUL = "#1F3A6E"
 ICON = {"cosecha": "🌱", "empaque": "📦", "transporte": "🚚"}
 TIPOS_EVENTO = ["cosecha", "empaque", "transporte"]
 CERTIFICACIONES = ["GlobalGAP", "Rainforest Alliance", "Fairtrade", "Ninguna"]
@@ -129,21 +129,35 @@ def kpis(df):
     frio = df[df["tipo_evento"].isin(["empaque", "transporte"])]
     rupturas = int((frio["temperatura"].astype(float) > UMBRAL_FRIO).sum())
     tp = round(sum(tiempos) / len(tiempos), 1) if tiempos else 0
-    return {"total_lotes": total_lotes, "pct_completos": round(pct, 0), "rupturas": rupturas, "tiempo_prom": tp}
+    return {"total_lotes": total_lotes, "pct_completos": round(pct, 0), "rupturas": rupturas, "tiempo_prom": tp, "completos": completos}
+
+
+def tarjeta(icono, etiqueta, valor, color, subtexto):
+    return (f"<div style='background:#FFFFFF; border:1px solid #DFD8C4; border-left:4px solid {color}; "
+            f"border-radius:12px; padding:16px 18px; box-shadow:0 1px 3px rgba(30,50,90,0.06); height:132px; "
+            f"display:flex; flex-direction:column; justify-content:center'>"
+            f"<div style='display:flex; align-items:center; gap:8px'>"
+            f"<span style='font-size:19px'>{icono}</span>"
+            f"<span style='font-size:12px; color:#5B6472; font-weight:600; text-transform:uppercase; letter-spacing:0.3px'>{etiqueta}</span></div>"
+            f"<div style='font-size:32px; font-weight:700; color:#26303F; margin-top:6px; line-height:1'>{valor}</div>"
+            f"<div style='font-size:12px; color:{color}; font-weight:600; margin-top:5px'>{subtexto}</div></div>")
 
 
 def barra(data, campo_x, campo_y, titulo_y):
+    base = alt.Chart(data).encode(
+        x=alt.X(f"{campo_x}:N", title=None, sort="-y",
+                axis=alt.Axis(labelAngle=0, labelColor="#5B6472", labelFontSize=12)),
+        y=alt.Y(f"{campo_y}:Q", title=titulo_y,
+                axis=alt.Axis(labelColor="#5B6472", titleColor="#5B6472", grid=True, gridColor="#E4E0D3")),
+        tooltip=[campo_x, campo_y],
+    )
+    barras = base.mark_bar(color=AZUL, cornerRadiusTopLeft=6, cornerRadiusTopRight=6, size=48)
+    texto = base.mark_text(dy=-9, color=AZUL, fontWeight="bold", fontSize=13).encode(text=f"{campo_y}:Q")
     return (
-        alt.Chart(data)
-        .mark_bar(color=GOLD, cornerRadiusTopLeft=5, cornerRadiusTopRight=5)
-        .encode(
-            x=alt.X(f"{campo_x}:N", title=None, sort="-y", axis=alt.Axis(labelAngle=0, labelColor="#5A5040")),
-            y=alt.Y(f"{campo_y}:Q", title=titulo_y, axis=alt.Axis(labelColor="#5A5040", titleColor="#5A5040")),
-            tooltip=[campo_x, campo_y],
-        )
-        .properties(height=320)
+        (barras + texto)
+        .properties(height=270)
         .configure_view(strokeWidth=0)
-        .configure_axis(grid=True, gridColor="#EDE4CE")
+        .configure_axis(domainColor="#DFD8C4")
     )
 
 
@@ -156,14 +170,14 @@ def bloque_mini(ev, malo, es_ultimo):
     icono = ICON.get(ev["tipo_evento"], "•")
     bloque = (f"<div style='border:1.5px solid {borde}; background:{fondo}; border-radius:12px; padding:12px 10px; width:150px; text-align:center; flex:0 0 auto;'>"
               f"<div style='font-size:26px; line-height:1'>{icono}</div>"
-              f"<div style='font-weight:700; color:#3A3222; font-size:13px; margin-top:4px'>{tipo}</div>"
-              f"<div style='color:#8A7A55; font-size:11px'>{ev['lote_id']} · Bloque {ev['id']}</div>"
-              f"<div style='font-family:monospace; font-size:10px; color:#A99770; margin-top:6px'>{ev['hash_evento'][:10]}…</div>"
+              f"<div style='font-weight:700; color:#26303F; font-size:13px; margin-top:4px'>{tipo}</div>"
+              f"<div style='color:#5B6472; font-size:11px'>{ev['lote_id']} · Bloque {ev['id']}</div>"
+              f"<div style='font-family:monospace; font-size:10px; color:#8A93A5; margin-top:6px'>{ev['hash_evento'][:10]}…</div>"
               f"<div style='background:{chip}; color:#FFF; font-size:10px; font-weight:700; padding:2px 8px; border-radius:20px; display:inline-block; margin-top:8px'>{estado}</div>"
               f"</div>")
     if es_ultimo:
         return bloque
-    col = "#C0392B" if malo else "#C8A032"
+    col = "#C0392B" if malo else "#1F3A6E"
     simbolo = "✕" if malo else "🔗"
     enlace = f"<div style='display:flex; align-items:center; color:{col}; font-size:18px; flex:0 0 auto; padding:0 2px'>{simbolo}</div>"
     return bloque + enlace
@@ -177,28 +191,25 @@ st.markdown(
     #MainMenu {visibility: hidden;}
     footer {visibility: hidden;}
     header {visibility: hidden;}
-    .block-container {padding-top: 1rem; padding-bottom: 1.5rem; max-width: 1150px;} .stExpander {margin-bottom: 0.4rem;} [data-testid="stVerticalBlock"] {gap: 0.7rem;}
-    [data-testid="stMetric"] {
-        background: #FAF4E6;
-        border: 1px solid #E8DCBC;
-        border-radius: 12px;
-        padding: 14px 16px;
-        min-height: 105px;
-        display: flex;
-        flex-direction: column;
-        justify-content: center;
-        box-shadow: 0 1px 2px rgba(120,90,20,0.05);
-    }
-    [data-testid="stMetricLabel"] p {color: #8A7A55; font-weight: 600; font-size: 14px;}
-    [data-testid="stMetricValue"] {color: #6E5A1E; font-size: 26px;}
-    h1, h2, h3 {color: #3A3222;}
-    .stTabs [data-baseweb="tab-list"] {gap: 6px; border-bottom: 1px solid #E8DCBC;}
-    hr {border-color: #E8DCBC; margin: 0.8rem 0;}
+    .block-container {padding-top: 1rem; padding-bottom: 1.5rem; max-width: 1150px;}
     [data-testid="stVerticalBlock"] {gap: 0.6rem;}
-    [data-testid="stHorizontalBlock"] {gap: 0.8rem;}
-    div[data-testid="stMarkdownContainer"] p {margin-bottom: 0.3rem;}
-    .stAlert {padding: 0.6rem 0.9rem;}
-    hr {margin: 0.5rem 0 !important;}
+    div[data-testid="stImage"] {margin-bottom: 0.5rem;}
+    h1, h2, h3 {color: #26303F;}
+    .stTabs [data-baseweb="tab-list"] {gap: 6px; border-bottom: 1px solid #DFD8C4;}
+    hr {margin: 0.5rem 0 !important; border-color: #DFD8C4;}
+    [data-testid="stTextInput"] input, [data-testid="stNumberInput"] input,
+    [data-testid="stDateInput"] input, [data-testid="stTimeInput"] input,
+    [data-baseweb="select"] > div, [data-baseweb="select"] > div > div,
+    div[data-baseweb="input"], div[data-baseweb="base-input"] {
+        background-color: #FFFFFF !important;
+        border: 1px solid #C9D2E0 !important;
+        border-radius: 8px !important;
+    }
+    [data-baseweb="select"] * {background-color: transparent !important;}
+    [data-testid="stForm"] {border: 1px solid #DFD8C4; border-radius: 14px; background: #FBFAF6; padding: 20px 22px;}
+    [data-testid="stForm"] label p {color: #1F3A6E !important; font-weight: 600; font-size: 13px;}
+    [data-testid="stForm"] [data-testid="stVerticalBlock"] {gap: 0.5rem;}
+    .stButton button, .stFormSubmitButton button {margin-top: 8px;}
     </style>
     """,
     unsafe_allow_html=True,
@@ -206,15 +217,7 @@ st.markdown(
 
 init_db()
 
-col_logo, col_title = st.columns([1, 8], vertical_alignment="center")
-with col_logo:
-    st.image("logo.png", width=110)
-with col_title:
-    st.markdown("<h1 style='margin:0'>Trazabilidad inteligente del banano</h1>", unsafe_allow_html=True)
-    st.markdown(
-        "<p style='color:#8A7A55; margin-top:4px; font-size:16px; font-weight:500'>Universidad Estatal Península de Santa Elena</p>",
-        unsafe_allow_html=True,
-    )
+st.image("banner.png", use_container_width=True)
 
 tab_reg, tab_traza, tab_int, tab_bi = st.tabs(
     ["  Registrar evento  ", "  Trazabilidad del lote  ", "  Verificar integridad  ", "  Dashboard BI  "]
@@ -282,18 +285,29 @@ with tab_int:
         eventos = df.to_dict("records")
 
         st.markdown("##### Demostrador: intenta manipular un dato")
-        col_l, col_r = st.columns([1, 1])
-        with col_l:
+        col_a, col_b = st.columns([1, 1])
+        with col_a:
             etiquetas = {f"Bloque {int(e['id'])} · {e['tipo_evento']} · {e['lote_id']}": int(e["id"]) for e in eventos}
             sel = st.selectbox("Elige un bloque", list(etiquetas.keys()))
             bid = etiquetas[sel]
             ev_sel = next(e for e in eventos if int(e["id"]) == bid)
-            temp_orig = float(ev_sel["temperatura"])
-        with col_r:
-            nueva_temp = st.number_input("Cambia la temperatura (°C)", value=temp_orig, step=0.1, format="%.1f")
+        with col_b:
+            campo = st.selectbox("¿Qué dato quieres manipular?", ["Temperatura", "Cajas", "Finca de origen", "Actor / responsable"])
 
         ev_mod = dict(ev_sel)
-        ev_mod["temperatura"] = nueva_temp
+        if campo == "Temperatura":
+            nuevo = st.number_input("Nuevo valor de temperatura (°C)", value=float(ev_sel["temperatura"]), step=0.1, format="%.1f")
+            ev_mod["temperatura"] = nuevo
+        elif campo == "Cajas":
+            nuevo = st.number_input("Nuevo número de cajas", value=int(ev_sel["cajas"]), step=1, min_value=0)
+            ev_mod["cajas"] = int(nuevo)
+        elif campo == "Finca de origen":
+            nuevo = st.text_input("Nueva finca de origen", value=str(ev_sel["finca_origen"]))
+            ev_mod["finca_origen"] = nuevo
+        else:
+            nuevo = st.text_input("Nuevo actor / responsable", value=str(ev_sel["actor"]))
+            ev_mod["actor"] = nuevo
+
         sello_original = ev_sel["hash_evento"]
         sello_nuevo = calcular_hash(ev_mod)
         manipulado = sello_nuevo != sello_original
@@ -301,25 +315,25 @@ with tab_int:
         cc1, cc2 = st.columns(2)
         with cc1:
             st.markdown(
-                f"<div style='border:1px solid #E8DCBC; background:#FAF4E6; border-radius:10px; padding:12px'>"
-                f"<div style='font-size:13px; color:#8A7A55; font-weight:600'>Sello guardado (original)</div>"
-                f"<div style='font-family:monospace; font-size:12px; color:#5A5040; margin-top:6px; word-break:break-all'>{sello_original[:40]}…</div></div>",
+                f"<div style='border:1px solid #DFD8C4; background:#F3F0E7; border-radius:10px; padding:12px'>"
+                f"<div style='font-size:13px; color:#5B6472; font-weight:600'>Sello guardado (original)</div>"
+                f"<div style='font-family:monospace; font-size:12px; color:#26303F; margin-top:6px; word-break:break-all'>{sello_original[:40]}…</div></div>",
                 unsafe_allow_html=True,
             )
         with cc2:
-            col_b = "#C0392B" if manipulado else "#2E7D32"
-            bg_b = "#FCEDEB" if manipulado else "#EDF7ED"
+            col_c = "#C0392B" if manipulado else "#2E7D32"
+            bg_c = "#FCEDEB" if manipulado else "#EDF7ED"
             st.markdown(
-                f"<div style='border:1px solid {col_b}; background:{bg_b}; border-radius:10px; padding:12px'>"
-                f"<div style='font-size:13px; color:{col_b}; font-weight:600'>Sello recalculado (con tu cambio)</div>"
-                f"<div style='font-family:monospace; font-size:12px; color:#5A5040; margin-top:6px; word-break:break-all'>{sello_nuevo[:40]}…</div></div>",
+                f"<div style='border:1px solid {col_c}; background:{bg_c}; border-radius:10px; padding:12px'>"
+                f"<div style='font-size:13px; color:{col_c}; font-weight:600'>Sello recalculado (con tu cambio)</div>"
+                f"<div style='font-family:monospace; font-size:12px; color:#26303F; margin-top:6px; word-break:break-all'>{sello_nuevo[:40]}…</div></div>",
                 unsafe_allow_html=True,
             )
 
         if manipulado:
-            st.error("Los sellos NO coinciden. Cambiar un solo dato altera el sello por completo, y el sistema detecta la manipulación al instante.")
+            st.error(f"Modificaste el campo «{campo}». Los sellos ya NO coinciden: el sistema detecta la manipulación al instante.")
         else:
-            st.info("Los sellos coinciden: no has cambiado ningún dato. Modifica la temperatura para ver qué ocurre.")
+            st.info("Los sellos coinciden: aún no has cambiado el dato. Modifica el valor para ver qué ocurre.")
 
         st.markdown("<div style='height:6px'></div>", unsafe_allow_html=True)
 
@@ -348,7 +362,7 @@ with tab_int:
                 unsafe_allow_html=True,
             )
 
-        st.markdown("<div style='height:14px'></div>", unsafe_allow_html=True)
+        st.markdown("<div style='height:12px'></div>", unsafe_allow_html=True)
         st.caption("Cadena de bloques")
         cadena = "<div style='display:flex; flex-wrap:wrap; align-items:center; gap:2px'>"
         for i, e in enumerate(estados):
@@ -363,21 +377,25 @@ with tab_bi:
         st.info("Aún no hay eventos registrados.")
     else:
         k = kpis(df)
+        col_frio = "#C0392B" if k["rupturas"] else "#2E7D32"
+        sub_frio = "Requiere atención" if k["rupturas"] else "Sin incidencias"
+        col_traza = "#2E7D32" if k["pct_completos"] >= 100 else "#1F3A6E"
         c1, c2, c3, c4 = st.columns(4)
-        c1.metric("Lotes", k["total_lotes"], help="Número de lotes registrados.")
-        c2.metric("Trazabilidad completa", f"{k['pct_completos']:.0f}%", help="Lotes con cosecha, empaque y transporte.")
-        c3.metric("Rupturas de frío", k["rupturas"], delta=("Alerta" if k["rupturas"] else "OK"),
-                  delta_color=("inverse" if k["rupturas"] else "normal"),
-                  help="Eventos con temperatura sobre el rango seguro (~13 °C).")
-        c4.metric("Tiempo cosecha a carga (h)", k["tiempo_prom"], help="Horas promedio entre cosecha y carga.")
-        st.divider()
-        col_a, col_b = st.columns(2)
+        c1.markdown(tarjeta("📦", "Lotes", k["total_lotes"], "#1F3A6E", "En seguimiento activo"), unsafe_allow_html=True)
+        c2.markdown(tarjeta("✔️", "Trazabilidad completa", f"{k['pct_completos']:.0f}%", col_traza, f"{k['completos']} de {k['total_lotes']} lotes completos"), unsafe_allow_html=True)
+        c3.markdown(tarjeta("❄️", "Rupturas de frío", k["rupturas"], col_frio, sub_frio), unsafe_allow_html=True)
+        c4.markdown(tarjeta("⏱️", "Tiempo cosecha a carga", f"{k['tiempo_prom']} h", "#1F3A6E", "Promedio por lote"), unsafe_allow_html=True)
+
+        st.markdown("<div style='height:26px'></div>", unsafe_allow_html=True)
+        st.markdown("<h3 style='color:#1F3A6E; font-size:19px; margin-bottom:4px'>Análisis visual</h3>", unsafe_allow_html=True)
+        st.markdown("<div style='height:10px'></div>", unsafe_allow_html=True)
+        col_a, col_b = st.columns(2, gap="large")
         with col_a:
-            st.caption("Cajas por finca de origen")
+            st.markdown("<p style='font-weight:600; color:#5B6472; font-size:14px; margin-bottom:6px'>Cajas por finca de origen</p>", unsafe_allow_html=True)
             d1 = df.groupby("finca_origen")["cajas"].sum().reset_index()
             st.altair_chart(barra(d1, "finca_origen", "cajas", "Cajas"), use_container_width=True)
         with col_b:
-            st.caption("Eventos por tipo")
+            st.markdown("<p style='font-weight:600; color:#5B6472; font-size:14px; margin-bottom:6px'>Eventos por tipo</p>", unsafe_allow_html=True)
             d2 = df["tipo_evento"].value_counts().reset_index()
             d2.columns = ["tipo_evento", "conteo"]
             st.altair_chart(barra(d2, "tipo_evento", "conteo", "Eventos"), use_container_width=True)
