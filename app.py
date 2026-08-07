@@ -402,7 +402,24 @@ with tab_bi:
             d1 = df.groupby("finca_origen")["cajas"].sum().reset_index()
             st.altair_chart(barra(d1, "finca_origen", "cajas", "Cajas"), use_container_width=True)
         with col_b:
-            st.markdown("<p style='font-weight:600; color:#5B6472; font-size:14px; margin-bottom:6px'>Eventos por tipo</p>", unsafe_allow_html=True)
-            d2 = df["tipo_evento"].value_counts().reset_index()
-            d2.columns = ["tipo_evento", "conteo"]
-            st.altair_chart(barra(d2, "tipo_evento", "conteo", "Eventos"), use_container_width=True)
+            st.markdown("<p style='font-weight:600; color:#5B6472; font-size:14px; margin-bottom:6px'>Temperatura promedio por etapa de la cadena</p>", unsafe_allow_html=True)
+            orden = ["cosecha","recepcion","lavado","clasificacion","empaque","etiquetado","paletizado","carga","transito","transporte","puerto"]
+            d2 = df.groupby("tipo_evento")["temperatura"].mean().reset_index()
+            d2["temperatura"] = d2["temperatura"].astype(float).round(1)
+            d2["orden"] = d2["tipo_evento"].apply(lambda x: orden.index(x) if x in orden else 99)
+            d2 = d2.sort_values("orden")
+            d2["estado"] = d2["temperatura"].apply(lambda t: "Ruptura de frio" if t > UMBRAL_FRIO else "En rango")
+            linea = alt.Chart(pd.DataFrame({"y": [UMBRAL_FRIO]})).mark_rule(
+                color="#C0392B", strokeDash=[5, 4]).encode(y="y:Q")
+            barras = alt.Chart(d2).mark_bar(cornerRadiusTopLeft=5, cornerRadiusTopRight=5).encode(
+                x=alt.X("tipo_evento:N", title=None, sort=list(d2["tipo_evento"]),
+                        axis=alt.Axis(labelAngle=-40, labelColor="#5B6472", labelFontSize=11)),
+                y=alt.Y("temperatura:Q", title="Temp. (C)",
+                        axis=alt.Axis(labelColor="#5B6472", titleColor="#5B6472", grid=True, gridColor="#E4E0D3")),
+                color=alt.Color("estado:N",
+                    scale=alt.Scale(domain=["En rango", "Ruptura de frio"], range=["#1F3A6E", "#C0392B"]),
+                    legend=alt.Legend(title=None, orient="top")),
+                tooltip=["tipo_evento", "temperatura"],
+            )
+            chart2 = (barras + linea).properties(height=270).configure_view(strokeWidth=0).configure_axis(domainColor="#DFD8C4")
+            st.altair_chart(chart2, use_container_width=True)
