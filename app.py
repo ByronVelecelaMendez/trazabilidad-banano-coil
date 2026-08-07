@@ -28,8 +28,8 @@ except Exception:
 GENESIS = "0" * 64
 UMBRAL_FRIO = 14.0
 AZUL = "#1F3A6E"
-ICON = {"cosecha": "🌱", "empaque": "📦", "transporte": "🚚"}
-TIPOS_EVENTO = ["cosecha", "empaque", "transporte"]
+ICON = {"cosecha": "🌱", "recepcion": "🏭", "lavado": "💧", "clasificacion": "📋", "empaque": "📦", "etiquetado": "🏷️", "paletizado": "🗄️", "carga": "🏗️", "transito": "🚚", "transporte": "🚚", "puerto": "⚓"}
+TIPOS_EVENTO = ["cosecha", "recepcion", "lavado", "clasificacion", "empaque", "etiquetado", "paletizado", "carga", "transito", "puerto"]
 CERTIFICACIONES = ["GlobalGAP", "Rainforest Alliance", "Fairtrade", "Ninguna"]
 
 
@@ -114,19 +114,24 @@ def leer_eventos():
         return pd.read_sql("SELECT * FROM eventos_trazabilidad ORDER BY id ASC", conn)
 
 
+ETAPAS_FRIAS = ["empaque", "etiquetado", "paletizado", "carga", "transito", "transporte", "puerto"]
+ETAPAS_CLAVE = {"cosecha", "empaque", "transito"}
+ETAPAS_CARGA = ["carga", "transito", "transporte"]
+
 def kpis(df):
     total_lotes = df["lote_id"].nunique()
     completos = 0
     tiempos = []
     for lote, g in df.groupby("lote_id"):
-        if {"cosecha", "empaque", "transporte"}.issubset(set(g["tipo_evento"])):
+        tipos = set(g["tipo_evento"])
+        if ETAPAS_CLAVE.issubset(tipos):
             completos += 1
         cos = g[g["tipo_evento"] == "cosecha"]["fecha_evento"]
-        tra = g[g["tipo_evento"] == "transporte"]["fecha_evento"]
-        if not cos.empty and not tra.empty:
-            tiempos.append((tra.min() - cos.min()).total_seconds() / 3600)
+        car = g[g["tipo_evento"].isin(ETAPAS_CARGA)]["fecha_evento"]
+        if not cos.empty and not car.empty:
+            tiempos.append((car.min() - cos.min()).total_seconds() / 3600)
     pct = (completos / total_lotes * 100) if total_lotes else 0
-    frio = df[df["tipo_evento"].isin(["empaque", "transporte"])]
+    frio = df[df["tipo_evento"].isin(ETAPAS_FRIAS)]
     rupturas = int((frio["temperatura"].astype(float) > UMBRAL_FRIO).sum())
     tp = round(sum(tiempos) / len(tiempos), 1) if tiempos else 0
     return {"total_lotes": total_lotes, "pct_completos": round(pct, 0), "rupturas": rupturas, "tiempo_prom": tp, "completos": completos}
