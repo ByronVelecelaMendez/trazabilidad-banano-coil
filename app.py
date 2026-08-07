@@ -176,7 +176,7 @@ def bloque_mini(ev, malo, es_ultimo):
     bloque = (f"<div style='border:1.5px solid {borde}; background:{fondo}; border-radius:12px; padding:12px 10px; width:150px; text-align:center; flex:0 0 auto;'>"
               f"<div style='font-size:26px; line-height:1'>{icono}</div>"
               f"<div style='font-weight:700; color:#26303F; font-size:13px; margin-top:4px'>{tipo}</div>"
-              f"<div style='color:#5B6472; font-size:11px'>{ev['lote_id']} · Bloque {ev['id']}</div>"
+              f"<div style='color:#5B6472; font-size:11px'>{ev['lote_id']} · Bloque {ev.get('n_bloque', ev['id'])}</div>"
               f"<div style='font-family:monospace; font-size:10px; color:#8A93A5; margin-top:6px'>{ev['hash_evento'][:10]}…</div>"
               f"<div style='background:{chip}; color:#FFF; font-size:10px; font-weight:700; padding:2px 8px; border-radius:20px; display:inline-block; margin-top:8px'>{estado}</div>"
               f"</div>")
@@ -288,11 +288,13 @@ with tab_int:
         st.info("Aún no hay eventos registrados.")
     else:
         eventos = df.to_dict("records")
+        for _n, _ev in enumerate(eventos, start=1):
+            _ev["n_bloque"] = _n
 
         st.markdown("##### Demostrador: intenta manipular un dato")
         col_a, col_b = st.columns([1, 1])
         with col_a:
-            etiquetas = {f"Bloque {int(e['id'])} · {e['tipo_evento']} · {e['lote_id']}": int(e["id"]) for e in eventos}
+            etiquetas = {f"Bloque {e['n_bloque']} · {e['tipo_evento']} · {e['lote_id']}": int(e["id"]) for e in eventos}
             sel = st.selectbox("Elige un bloque", list(etiquetas.keys()))
             bid = etiquetas[sel]
             ev_sel = next(e for e in eventos if int(e["id"]) == bid)
